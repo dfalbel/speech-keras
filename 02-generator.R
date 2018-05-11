@@ -15,12 +15,13 @@ data_generator <- function(df, batch_size, shuffle = TRUE) {
       # create the spectrogram
       spectrogram <- audio_ops$audio_spectrogram(
         wav$audio,
-        window_size = wav$sample_rate/50,
-        stride = wav$sample_rate/75,
+        window_size = 16000/50,
+        stride = 16000/75,
         magnitude_squared = TRUE
       )
       
       spectrogram <- tf$log(tf$abs(spectrogram) + 0.01)
+      spectrogram <- tf$transpose(spectrogram, perm = c(1L, 2L, 0L))
       
       # create the  Mel-Frequency Cepstral Coefficients
       # x <- audio_ops$mfcc(
@@ -37,11 +38,11 @@ data_generator <- function(df, batch_size, shuffle = TRUE) {
     dataset_repeat()
   
   if (shuffle) 
-    ds <- ds %>% dataset_shuffle(buffer_size = 20000)  
+    ds <- ds %>% dataset_shuffle(buffer_size = 100)  
   
   
   ds <- ds %>% 
-    dataset_padded_batch(batch_size, list(shape(NULL), shape(NULL, 74, 257)))
+    dataset_padded_batch(batch_size, list(shape(74, 257, NULL), shape(NULL)))
   
   ds
 }
