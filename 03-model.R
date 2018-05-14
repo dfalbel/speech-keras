@@ -3,7 +3,10 @@ library(dplyr)
 source("02-generator.R")
 
 df <- readRDS("data/df.rds") %>% sample_frac(1)
-ds <- data_generator(df, 32)
+id_train <- sample(nrow(df), size = 0.7*nrow(df))
+
+ds_train <- data_generator(df[id_train,], 32)
+ds_test <- data_generator(df[-id_train,], 32, shuffle = FALSE)
 
 input <- layer_input(shape = c(74, 257, 1))
 
@@ -28,9 +31,11 @@ model %>% compile(
 
 # Train model
 model %>% fit_generator(
-  generator = ds,
-  steps_per_epoch = 10,
-  epochs = 1
+  generator = ds_train,
+  steps_per_epoch = 0.7*nrow(df)/32,
+  epochs = 10, 
+  validation_data = ds_test, 
+  validation_steps = 0.3*nrow(df)/32
 )
 
 
