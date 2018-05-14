@@ -7,4 +7,4 @@ download.file(
   destfile = "data/speech_commands_v0.01.tar.gz"
 )
 
-untar("speech_commands_v0.01.tar.gz")
+untar("data/speech_commands_v0.01.tar.gz", exdir = "data/speech_commands_v0.01")
