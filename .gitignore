@@ -4,3 +4,4 @@
 .Ruserdata
 data/
 *DS_Store
+*.hdf5

@@ -8,11 +8,16 @@ id_train <- sample(nrow(df), size = 0.7*nrow(df))
 ds_train <- data_generator(df[id_train,], 32)
 ds_test <- data_generator(df[-id_train,], 32, shuffle = FALSE)
 
-input <- layer_input(shape = c(74, 257, 1))
+input <- layer_input(shape = c(98, 257, 1))
 
 output <- input %>%
   layer_conv_2d(filters = 32, kernel_size = c(3,3), activation = 'relu') %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
   layer_conv_2d(filters = 64, kernel_size = c(3,3), activation = 'relu') %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+  layer_conv_2d(filters = 128, kernel_size = c(3,3), activation = 'relu') %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+  layer_conv_2d(filters = 256, kernel_size = c(3,3), activation = 'relu') %>% 
   layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
   layer_dropout(rate = 0.25) %>% 
   layer_flatten() %>% 
@@ -32,11 +37,13 @@ model %>% compile(
 # Train model
 model %>% fit_generator(
   generator = ds_train,
-  steps_per_epoch = 0.7*nrow(df)/32,
+  steps_per_epoch = 0.8*nrow(df)/32,
   epochs = 10, 
   validation_data = ds_test, 
-  validation_steps = 0.3*nrow(df)/32
+  validation_steps = 0.2*nrow(df)/32
 )
+
+save_model_hdf5(model, "model.hdf5")
 
 
 
