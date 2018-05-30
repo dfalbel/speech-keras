@@ -5,7 +5,7 @@ author: "Daniel Falbel"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 ```
 
 ## Introduction
@@ -20,17 +20,47 @@ The model we will implement is not the state of the art for audio recognition sy
 
 ## Audio representation
 
-Many deep learning models are end-to-end, ie. we let the model learn useful representations directly from the raw data but, audio data grows very fast - 16,000 samples per seconds with a very rich structure at many time-scales. In order to avoid raw wave sound data, researchers usualy use some kind of feature engeneering.
+Many deep learning models are end-to-end, ie. we let the model learn useful representations directly from the raw data but, audio data grows very fast - 16,000 samples per second with a very rich structure at many time-scales. In order to avoid raw wave sound data, researchers usualy use some kind of feature engeneering.
 
 Every sound wave can be represented by it's spectrum, and digitaly it can be computed using the [Fast Fourier Transform (FFT)](https://en.wikipedia.org/wiki/Fast_Fourier_transform).
 
 ![By Phonical - Own work, CC BY-SA 4.0, https://commons.wikimedia.org/w/index.php?curid=64473578](https://upload.wikimedia.org/wikipedia/commons/6/61/FFT-Time-Frequency-View.png)
 
-A common way to represent audio data is break it in small chunks, which usualy overlap. For each chunk we use the FFT to calculate the magnitude of the frequency spectrum. The spectrums are then combined side by side to form what we call a [spectrogram](https://en.wikipedia.org/wiki/Spectrogram).
+A common way to represent audio data is break it into small chunks, which usualy overlap. For each chunk we use the FFT to calculate the magnitude of the frequency spectrum. The spectrums are then combined side by side to form what we call a [spectrogram](https://en.wikipedia.org/wiki/Spectrogram).
 
 ![By Aquegg - Own work, Public Domain, https://commons.wikimedia.org/w/index.php?curid=5544473](https://upload.wikimedia.org/wikipedia/commons/c/c5/Spectrogram-19thC.png)
 
-After this procedure we have an image for each audio sample and we can use convolutional networks that are usual in image recognition models.
+After this procedure we have an image for each audio sample and we can use convolutional neural networks that are usual in image recognition models.
+
+## Downloading data
+
+First, let's download data to a directory in our project, you can wither download from [this link](http://download.tensorflow.org/data/speech_commands_v0.01.tar.gz) (~1GB) or from R with:
+
+```{r}
+dir.create("data")
+
+download.file(
+  url = "http://download.tensorflow.org/data/speech_commands_v0.01.tar.gz", 
+  destfile = "data/speech_commands_v0.01.tar.gz"
+)
+
+untar("data/speech_commands_v0.01.tar.gz", exdir = "data/speech_commands_v0.01")
+```
+
+Inside the `data` directory we will have a folder called `speech_commands_v0.01`. The WAV audio files inside this directory are organised in sub-folders with the label names. For example, all one-second audio files of people speaking the word "bed" are inside the `bed` directory. There are 30 of them and a special one called `_background_noise_` which contains background noises that could be mixed in to simulate background noise.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
