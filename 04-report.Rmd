@@ -32,10 +32,7 @@ A common way to represent audio data is break it into small chunks, which usualy
 
 After this procedure we have an image for each audio sample and we can use convolutional neural networks that are usual in image recognition models. 
 
-
-
-
-## Downloading data
+## Downloading
 
 First, let's download data to a directory in our project, you can wither download from [this link](http://download.tensorflow.org/data/speech_commands_v0.01.tar.gz) (~1GB) or from R with:
 
@@ -52,9 +49,40 @@ untar("data/speech_commands_v0.01.tar.gz", exdir = "data/speech_commands_v0.01")
 
 Inside the `data` directory we will have a folder called `speech_commands_v0.01`. The WAV audio files inside this directory are organised in sub-folders with the label names. For example, all one-second audio files of people speaking the word "bed" are inside the `bed` directory. There are 30 of them and a special one called `_background_noise_` which contains background noises that could be mixed in to simulate background noise.
 
+## Importing
 
+In this step we will list all audio .wav files into a `tibble` with 3 columns: 
 
+* `fname`: the file name;
+* `class`: the label for each audio file;
+* `class_id`: a unique integer number starting from zero for each class.
 
+This will be useful to the next step when we will create a generator using the `tfdatasets` package.
+
+```{r}
+library(stringr)
+library(dplyr)
+
+files <- fs::dir_ls(
+  path = "data/speech_commands_v0.01/", 
+  recursive = TRUE, 
+  glob = "*.wav"
+)
+
+files <- files[!str_detect(files, "background_noise")]
+
+df <- data_frame(
+  fname = files, 
+  class = fname %>% str_extract("1/.*/") %>% 
+    str_replace_all("1/", "") %>%
+    str_replace_all("/", ""),
+  class_id = class %>% as.factor() %>% as.integer() - 1L
+)
+```
+
+## Genearting
+
+We will now create 
 
 
 
