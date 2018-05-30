@@ -26,11 +26,14 @@ Every sound wave can be represented by it's spectrum, and digitaly it can be com
 
 ![By Phonical - Own work, CC BY-SA 4.0, https://commons.wikimedia.org/w/index.php?curid=64473578](https://upload.wikimedia.org/wikipedia/commons/6/61/FFT-Time-Frequency-View.png)
 
-A common way to represent audio data is break it into small chunks, which usualy overlap. For each chunk we use the FFT to calculate the magnitude of the frequency spectrum. The spectrums are then combined side by side to form what we call a [spectrogram](https://en.wikipedia.org/wiki/Spectrogram).
+A common way to represent audio data is break it into small chunks, which usualy overlap. For each chunk we use the FFT to calculate the magnitude of the frequency spectrum. The spectrums are then combined side by side to form what we call a [spectrogram](https://en.wikipedia.org/wiki/Spectrogram). It's also common for speech recognition systems to further transform the spectrum and compute the [Mel-Frequency Cepstral Coefficients](https://en.wikipedia.org/wiki/Mel-frequency_cepstrum), this transformation takes into account that the human ear can't discern the difference between two closely spaced frequencies and smartly creates bins in the frequency axis.
 
 ![By Aquegg - Own work, Public Domain, https://commons.wikimedia.org/w/index.php?curid=5544473](https://upload.wikimedia.org/wikipedia/commons/c/c5/Spectrogram-19thC.png)
 
-After this procedure we have an image for each audio sample and we can use convolutional neural networks that are usual in image recognition models.
+After this procedure we have an image for each audio sample and we can use convolutional neural networks that are usual in image recognition models. 
+
+
+
 
 ## Downloading data
 
