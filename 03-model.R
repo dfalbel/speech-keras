@@ -5,10 +5,10 @@ source("02-generator.R")
 df <- readRDS("data/df.rds") %>% sample_frac(1)
 id_train <- sample(nrow(df), size = 0.7*nrow(df))
 
-ds_train <- data_generator(df[id_train,], 32)
+ds_train <- data_generator(df[id_train,], 32L)
 ds_test <- data_generator(df[-id_train,], 32, shuffle = FALSE)
 
-input <- layer_input(shape = c(98, 257, 1))
+input <- layer_input(shape = c(100, 257, 1))
 
 output <- input %>%
   layer_conv_2d(filters = 32, kernel_size = c(3,3), activation = 'relu') %>% 
