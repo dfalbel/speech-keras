@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 
 In this tutorial we will build a deep learning model to classify words. We will use [`tfdatasets`](https://tensorflow.rstudio.com/tools/tfdatasets/articles/introduction.html) to handle data IO and pre-processing, and [Keras](https://keras.rstudio.com) to build and train the model.
 
-We will use the [Speech Commands dataset](https://storage.cloud.google.com/download.tensorflow.org/data/speech_commands_v0.01.tar.gz) which consists of 65.000 one-second audio files of people saying 30 different words. Each file contains a single spoken English word. The dataset was released by Google under CC License (which one???).
+We will use the [Speech Commands dataset](https://storage.cloud.google.com/download.tensorflow.org/data/speech_commands_v0.01.tar.gz) which consists of 65.000 one-second audio files of people saying 30 different words. Each file contains a single spoken English word. The dataset was released by Google under CC License.
 
 Our model was first implemented in [*Simple Audio Recognition* at the TensorFlow documentation](https://www.tensorflow.org/tutorials/audio_recognition#top_of_page) which in turn was inpired by [*Convolutional Neural Networks for Small-footprint Keyword Spotting*](http://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf). There are other approaches, like [recurent neural networks](https://svds.com/tensorflow-rnn-tutorial/), [dilated (atrous) convolutions](https://deepmind.com/blog/wavenet-generative-model-raw-audio/) or [Learning from Between-class Examples for Deep Sound Recognition](https://arxiv.org/abs/1711.10282).
 
@@ -95,12 +95,25 @@ library(tfdatasets)
 ds <- tensor_slices_dataset(df) 
 ```
 
-Now, let's define the parameters for the spectrogram creation. We need to define the `frame_lenght` which is the size of each chunk we will break the audio wave; the `frame_step`: the number of samples to step between each chunk; `fft_lenght`: the size of the FFT to apply, an usual default value for the `fft_lenght` is the smallest power of 2 enclosing frame_length.
+Now, let's define the parameters for the spectrogram creation. We need to define the `window_size_ms` which is the size in milliseconds of each chunk we will break the audio wave; the `window_stride_ms`: the distance between the center of adjacent chunks; 
 
 ```{r}
-frame_length <- 480L
-frame_step <- 160L
-fft_length <- as.integer(2^(as.integer(log(frame_length, 2)) + 1L))
+window_size_ms <- 30
+window_stride_ms <- 10
+```
+
+Now we will convert the window size and stride from milliseconds to samples. We are considering that our audio files have 16,000 samples per second (1000 ms). 
+
+```{r}
+window_size <- as.integer(16000*window_size_ms/1000)
+stride <- as.integer(16000*window_stride_ms/1000)
+```
+
+We will obtain other quantities that will be usefull for the spectrogram creation like the number of chunks and the FFT size, ie. the number of bins the frequency axis. The function we are going to use to compute the spectrogram doesn't allow us to change the FFT size and uses by default the first superior power of 2 of the window size.
+
+```{r}
+fft_size <- as.integer(2^trunc(log(window_size, 2)) + 1)
+n_chunks <- length(seq(window_size/2, 16000 - window_size/2, stride))
 ```
 
 We will now use `dataset_map` which allows us to specify a pre-processing function for each observation (line) of our dataset. It's in this step that we read the raw audio file from disk and create it's spectrogram and the one-hot encoded response vector.
@@ -108,7 +121,6 @@ We will now use `dataset_map` which allows us to specify a pre-processing functi
 ```{r}
 # shortcuts to used TensorFlow modules.
 audio_ops <- tf$contrib$framework$python$ops$audio_ops
-signal <- tf$contrib$signal 
 
 ds <- ds %>%
   dataset_map(function(obs) {
@@ -122,24 +134,21 @@ ds <- ds %>%
     wav <- audio_ops$decode_wav(audio_binary, desired_channels = 1)
     
     # create the spectrogram
-    spectrogram <- signal$stft(
-      wav$audio[,1], 
-      frame_length = frame_length, 
-      frame_step = frame_step, 
-      pad_end = TRUE, 
-      fft_length = fft_length
+    spectrogram <- audio_ops$audio_spectrogram(
+      wav$audio, 
+      window_size = window_size, 
+      stride = stride,
+      magnitude_squared = TRUE
     )
     
-    # getting magnitudes squared
-    spectrogram <- tf$real(spectrogram * tf$conj(spectrogram))
     # normalization
     spectrogram <- tf$log(tf$abs(spectrogram) + 0.01)
     
-    # adds a dummy dimension since imgs are considered a 3d array in keras.
-    spectrogram <- tf$expand_dims(spectrogram, -1L)
+    # moving channels to last dim
+    spectrogram <- tf$transpose(spectrogram, perm = c(1L, 2L, 0L))
     
     # transform the class_id into a one-hot encoded vector
-    response <- tf$one_hot(obs$class_id, 29L)
+    response <- tf$one_hot(obs$class_id, 30L)
     
     list(spectrogram, response)
   }) 
@@ -154,26 +163,27 @@ ds <- ds %>%
   dataset_padded_batch(
     batch_size = 32, 
     padded_shapes = list(
-      shape(16000/frame_step, fft_length/2 + 1, NULL), 
+      shape(n_chunks, fft_size, NULL), 
       shape(NULL)
     )
   )
 ```
 
-This is our Dataset specification, but we would need to rewrite all the code for the validation data, so it's a good practice to wrap this into a function of the data and other important parameters like the `frame_lenght`, `frame_step` and etc. Below, we will define a function called `data_geneartor` that will create the generator depending on those inputs.
+This is our Dataset specification, but we would need to rewrite all the code for the validation data, so it's a good practice to wrap this into a function of the data and other important parameters like the `window_size_ms` and `window_stride_ms`. Below, we will define a function called `data_geneartor` that will create the generator depending on those inputs.
 
 ```{r}
 data_generator <- function(df, batch_size, shuffle = TRUE, 
-                           frame_length = 480L, frame_step = 160L) {
+                           window_size_ms = 30, window_stride_ms = 10) {
   
-  ds <- tensor_slices_dataset(df) 
+  window_size <- as.integer(16000*window_size_ms/1000)
+  stride <- as.integer(16000*window_stride_ms/1000)
+  fft_size <- as.integer(2^trunc(log(window_size, 2)) + 1)
+  n_chunks <- length(seq(window_size/2, 16000 - window_size/2, stride))
+  
+  ds <- tensor_slices_dataset(df)
   
   if (shuffle) 
-    ds <- ds %>% dataset_shuffle(1000)  
-  
-  # fft lenght
-  # by default it's the smallest power of 2 enclosing frame_length.
-  fft_length <- as.integer(2^(as.integer(log(frame_length, 2)) + 1L))
+    ds <- ds %>% dataset_shuffle(buffer_size = 100)  
   
   ds <- ds %>%
     dataset_map(function(obs) {
@@ -183,35 +193,25 @@ data_generator <- function(df, batch_size, shuffle = TRUE,
       wav <- audio_ops$decode_wav(audio_binary, desired_channels = 1)
       
       # create the spectrogram
-      spectrogram <- signal$stft(
-        wav$audio[,1], 
-        frame_length = frame_length, 
-        frame_step = frame_step, 
-        pad_end = TRUE, 
-        fft_length = fft_length
+      spectrogram <- audio_ops$audio_spectrogram(
+        wav$audio, 
+        window_size = window_size, 
+        stride = stride,
+        magnitude_squared = TRUE
       )
       
-      spectrogram <- tf$real(spectrogram * tf$conj(spectrogram))
       spectrogram <- tf$log(tf$abs(spectrogram) + 0.01)
-      spectrogram <- tf$expand_dims(spectrogram, -1L)
-      
+      spectrogram <- tf$transpose(spectrogram, perm = c(1L, 2L, 0L))
       
       # transform the class_id into a one-hot encoded vector
       response <- tf$one_hot(obs$class_id, 29L)
       
       list(spectrogram, response)
-    }) 
-  
+    }) %>%
+    dataset_repeat()
   
   ds <- ds %>% 
-    dataset_repeat() %>%
-    dataset_padded_batch(
-      batch_size, 
-      list(
-        shape(as.integer(16000/frame_step), as.integer(fft_length/2 + 1), NULL), 
-        shape(NULL)
-      )
-    )
+    dataset_padded_batch(batch_size, list(shape(n_chunks, fft_size, NULL), shape(NULL)))
   
   ds
 }
@@ -223,8 +223,19 @@ Now, we can define training and validation data generators. It's worth noting th
 set.seed(6)
 id_train <- sample(nrow(df), size = 0.7*nrow(df))
 
-ds_train <- data_generator(df[id_train,], 32)
-ds_test <- data_generator(df[-id_train,], 32, shuffle = FALSE)
+ds_train <- data_generator(
+  df[id_train,], 
+  batch_size = 32, 
+  window_size_ms = 30, 
+  window_stride_ms = 10
+)
+ds_test <- data_generator(
+  df[-id_train,], 
+  batch_size = 32, 
+  shuffle = FALSE, 
+  window_size_ms = 30, 
+  window_stride_ms = 10
+)
 ```
 
 To actually get a batch from the generator we could create a TensorFlow session and ask it to run the generator. For example:
@@ -237,38 +248,157 @@ str(batch)
 
 Each time you run the line `batch <- sess$run(ds_train)` you should see a different batch of observations.
 
+## Model definition
 
+Now that we know how we will feed our data we can focus on the model definition. The spectrogram can be treated like an image, so architectures that are commonly used in image recognition tasks should work well with the spectrograms too. 
 
+We will build a convolutional neural network similar to what we have built [here](https://keras.rstudio.com/articles/examples/mnist_cnn.html) for the MNIST dataset.
 
+The input size is defined by the number of chunks and the FFT size. Like we explained earlier, they can be obtained from the `window_size_ms` and `window_stride_ms` used to generate the spectrogram.
 
+```{r}
+window_size <- as.integer(16000*window_size_ms/1000)
+stride <- as.integer(16000*window_stride_ms/1000)
+fft_size <- as.integer(2^trunc(log(window_size, 2)) + 1)
+n_chunks <- length(seq(window_size/2, 16000 - window_size/2, stride))
+```
 
+We will now define our model using the Keras sequential API:
 
+```{r}
+model <- keras_model_sequential()
+model %>%  
+  layer_conv_2d(input_shape = c(n_chunks, fft_size, 1), 
+                filters = 32, kernel_size = c(3,3), activation = 'relu') %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+  layer_conv_2d(filters = 64, kernel_size = c(3,3), activation = 'relu') %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+  layer_conv_2d(filters = 128, kernel_size = c(3,3), activation = 'relu') %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+  layer_conv_2d(filters = 256, kernel_size = c(3,3), activation = 'relu') %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_flatten() %>% 
+  layer_dense(units = 128, activation = 'relu') %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 30, activation = 'softmax')
+```
 
+We used 4 layers of convolutions combined with max pooling layers to extract features from the spectrogram images and 2 dense layers at the top. Our network is comparatevely simple when compared to more advanced archutectures like VGG and DenseNets that perform very well on image recognition tasks.
 
+Now let's compile our model. We will use the categorical crossentropy as the loss function and use the Adadelta optimizer. It's also here that we define that we will look at the accuracy metric during training.
 
+```{r}
+model %>% compile(
+  loss = loss_categorical_crossentropy,
+  optimizer = optimizer_adadelta(),
+  metrics = c('accuracy')
+)
+```
 
+## Model fitting
 
+Now, we will fit our model. In Keras we can use TensorFlow Datasets as inputs to the the `fit_generator` function and we will will do it here.
 
+```{r}
+model %>% fit_generator(
+  generator = ds_train,
+  steps_per_epoch = 0.7*nrow(df)/32,
+  epochs = 10, 
+  validation_data = ds_test, 
+  validation_steps = 0.3*nrow(df)/32
+)
+```
 
+```
+Epoch 1/10
+1415/1415 [==============================] - 87s 62ms/step - loss: 2.0225 - acc: 0.4184 - val_loss: 0.7855 - val_acc: 0.7907
+Epoch 2/10
+1415/1415 [==============================] - 75s 53ms/step - loss: 0.8781 - acc: 0.7432 - val_loss: 0.4522 - val_acc: 0.8704
+Epoch 3/10
+1415/1415 [==============================] - 75s 53ms/step - loss: 0.6196 - acc: 0.8190 - val_loss: 0.3513 - val_acc: 0.9006
+Epoch 4/10
+1415/1415 [==============================] - 75s 53ms/step - loss: 0.4958 - acc: 0.8543 - val_loss: 0.3130 - val_acc: 0.9117
+Epoch 5/10
+1415/1415 [==============================] - 75s 53ms/step - loss: 0.4282 - acc: 0.8754 - val_loss: 0.2866 - val_acc: 0.9213
+Epoch 6/10
+1415/1415 [==============================] - 76s 53ms/step - loss: 0.3852 - acc: 0.8885 - val_loss: 0.2732 - val_acc: 0.9252
+Epoch 7/10
+1415/1415 [==============================] - 75s 53ms/step - loss: 0.3566 - acc: 0.8991 - val_loss: 0.2700 - val_acc: 0.9269
+Epoch 8/10
+1415/1415 [==============================] - 76s 54ms/step - loss: 0.3364 - acc: 0.9045 - val_loss: 0.2573 - val_acc: 0.9284
+Epoch 9/10
+1415/1415 [==============================] - 76s 53ms/step - loss: 0.3220 - acc: 0.9087 - val_loss: 0.2537 - val_acc: 0.9323
+Epoch 10/10
+1415/1415 [==============================] - 76s 54ms/step - loss: 0.2997 - acc: 0.9150 - val_loss: 0.2582 - val_acc: 0.9323
+```
 
+The model accuracy was 93.23%. Let's learn how to make predictions and take a look at the confusion matrix.
 
+## Making predictions
 
+We can use the`predict_generator` function to make predictions to a new dataset. Let's make predictions for our test dataset.
+The `predict_generator` function needs a step argument which is the number of times the generator will be called.
 
+We can calculate the number of steps by knowing the batch size, and the size of the test dataset. 
 
+```{r}
+df_test <- df[-id_train,]
+n_steps <- nrow(df_test)/32 + 1
+```
 
+We can then use the `predict_generator` function:
 
+```{r}
+predictions <- predict_generator(
+  model, 
+  ds_test, 
+  steps = n_steps
+  )
+str(predictions)
+```
 
+```
+num [1:19424, 1:30] 1.22e-13 7.30e-19 5.29e-10 6.66e-22 1.12e-17 ...
+```
 
+This will output a matrix with 30 columns - one for each word and n_steps*batch_size number of rows. Note that it starts repeating the dataset at the end to create a full batch.
 
+We can compute the predicted class by taking the column with the the greater probability, for example.
 
+```{r}
+classes <- apply(predictions, 1, which.max) - 1
+```
 
+A nice visualization of the confusion matrix is to create an alluvial diagram:
 
+```{r}
+library(dplyr)
+library(alluvial)
+x <- df_test %>%
+  mutate(pred_class_id = head(classes, nrow(df_test))) %>%
+  left_join(
+    df_test %>% distinct(class_id, class) %>% rename(pred_class = class),
+    by = c("pred_class_id" = "class_id")
+  ) %>%
+  mutate(correct = pred_class == class) %>%
+  count(pred_class, class, correct)
 
+alluvial(
+  x %>% select(class, pred_class),
+  freq = x$n,
+  col = ifelse(x$correct, "lightblue", "red"),
+  border = ifelse(x$correct, "lightblue", "red"),
+  alpha = 0.6,
+  hide = x$n < 20
+)
+```
 
+![Alluvial Plot](plots/alluvial.png)
 
+We can see from the diagram that the most relevant mistake our model makes is to classify "tree" as "three". There are other common errors like classifying "go" and "no", "up" as "off". With 93% of accuracy and considering the errors we can say that this model is pretty reasonable.
 
+The saved model ocuppies 25Mb in disk, which is reasonable for a desktop but may not be for using in small devices. We could train a smaller model, with less layers, and see how much the performance decreases.
 
-
-
-
+In speech recognition tasks it's also common to do some kind of data augmentation by mixing a background noise to the spoken audio making it more usefull for real applications where it's common to have other irrelevant sounds happening in the environment.
 
