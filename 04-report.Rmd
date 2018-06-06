@@ -242,11 +242,17 @@ To actually get a batch from the generator we could create a TensorFlow session 
 
 ```{r}
 sess <- tf$Session()
-batch <- sess$run(ds_train)
-str(batch)
+batch <- next_batch(ds_train)
+str(sess$run(batch))
 ```
 
-Each time you run the line `batch <- sess$run(ds_train)` you should see a different batch of observations.
+```
+List of 2
+ $ : num [1:32, 1:98, 1:257, 1] -4.6 -4.6 -4.61 -4.6 -4.6 ...
+ $ : num [1:32, 1:30] 0 0 0 0 0 0 0 0 0 0 ...
+```
+
+Each time you run `sess$run(batch)` you should see a different batch of observations.
 
 ## Model definition
 
