@@ -272,6 +272,7 @@ n_chunks <- length(seq(window_size/2, 16000 - window_size/2, stride))
 We will now define our model using the Keras sequential API:
 
 ```{r}
+library(keras)
 model <- keras_model_sequential()
 model %>%  
   layer_conv_2d(input_shape = c(n_chunks, fft_size, 1), 
