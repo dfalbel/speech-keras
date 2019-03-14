@@ -91,6 +91,7 @@ The generator we will create will be responsible for reading the audio files fro
 Let's start defining creating the dataset from slices of the `data.frame` with audio file names and classes we just created.
 
 ```{r}
+library(keras)
 library(tfdatasets)
 ds <- tensor_slices_dataset(df) 
 ```
