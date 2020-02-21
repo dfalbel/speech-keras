@@ -28,7 +28,7 @@ model %>%
 
 # Compile model
 model %>% compile(
-  loss = loss_categorical_crossentropy,
+  loss = "categorical_crossentropy",
   optimizer = optimizer_adadelta(),
   metrics = c('accuracy')
 )
@@ -42,7 +42,4 @@ model %>% fit_generator(
   validation_steps = 0.3*nrow(df)/32
 )
 
-save_model_hdf5(model, "model.hdf5")
-
-
-
+save_model_hdf5(model, filepath = "model.hdf5")

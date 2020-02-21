@@ -2,8 +2,6 @@
 
 library(tfdatasets)
 
-audio_ops <- tf$contrib$framework$python$ops$audio_ops
-
 data_generator <- function(df, batch_size, shuffle = TRUE, 
                            window_size_ms = 30, window_stride_ms = 10) {
   
@@ -21,18 +19,17 @@ data_generator <- function(df, batch_size, shuffle = TRUE,
     dataset_map(function(obs) {
       
       # decoding wav files
-      audio_binary <- tf$read_file(tf$reshape(obs$fname, shape = list()))
-      wav <- audio_ops$decode_wav(audio_binary, desired_channels = 1)
+      audio_binary <- tf$io$read_file(tf$reshape(obs$fname, shape = list()))
+      wav <- tf$audio$decode_wav(audio_binary, desired_channels = 1)
+      samples <- wav$audio
+      samples <- samples %>% tf$transpose(perm = c(1L, 0L))
       
       # create the spectrogram
-      spectrogram <- audio_ops$audio_spectrogram(
-        wav$audio, 
-        window_size = window_size, 
-        stride = stride,
-        magnitude_squared = TRUE
-      )
+      spectrogram <- tf$signal$stft(samples,
+                                   frame_length = as.integer(window_size),
+                                   frame_step = as.integer(stride))
       
-      spectrogram <- tf$log(tf$abs(spectrogram) + 0.01)
+      spectrogram <- tf$math$log(tf$abs(spectrogram) + 0.01)
       spectrogram <- tf$transpose(spectrogram, perm = c(1L, 2L, 0L))
       
       # transform the class_id into a one-hot encoded vector
