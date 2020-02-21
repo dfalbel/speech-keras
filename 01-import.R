@@ -3,13 +3,13 @@ library(dplyr)
 
 files <- fs::dir_ls(
   path = "data/speech_commands_v0.01/", 
-  recursive = TRUE, 
+  recurse = TRUE, 
   glob = "*.wav"
 )
 
 files <- files[!str_detect(files, "background_noise")]
 
-df <- data_frame(
+df <- tibble(
   fname = files, 
   class = fname %>% str_extract("1/.*/") %>% 
     str_replace_all("1/", "") %>%
